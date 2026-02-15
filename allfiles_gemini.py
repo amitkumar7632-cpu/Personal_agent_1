@@ -13,6 +13,16 @@ from google import genai
 # --- Explicitly set Tesseract path ---
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Hello, Render!"
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 10000))  # Render provides PORT automatically
+    app.run(host="0.0.0.0", port=port)
+    
 # --- Extract text from PPT slides (shapes + images with OCR) ---
 def extract_text_from_ppt(filepath):
     texts = []
