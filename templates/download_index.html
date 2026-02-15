@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>📂 Folder Q&A Agent</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body class="container mt-5">
+    <h1 class="mb-4">📂 Folder Q&A Agent</h1>
+    <form method="post">
+        <input class="form-control mb-3" name="query" placeholder="Ask a question">
+        <button class="btn btn-primary">Submit</button>
+    </form>
+
+    {% if answer %}
+    <div class="card mt-4">
+        <div class="card-body">
+            <h5 class="card-title">Gemini Answer</h5>
+            <p class="card-text">{{ answer|safe }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if context %}
+    <div class="card mt-4">
+        <div class="card-body">
+            <h5 class="card-title">Retrieved Context</h5>
+
+            <!-- Download button -->
+            <a href="data:text/plain;charset=utf-8,{{ context | urlencode }}" 
+               download="context.txt" 
+               class="btn btn-secondary mb-3">
+               Download Context
+            </a>
+
+            <!-- Accordion grouping by filename -->
+            <div class="accordion" id="contextAccordion">
+                {% set grouped = {} %}
+                {% for line in context.splitlines() %}
+                    {% set parts = line.split(" - ", 1) %}
+                    {% set grouped = grouped.update({parts[0]: (grouped.get(parts[0], []) + [parts[1]])}) or grouped %}
+                {% endfor %}
+
+                {% for filename, snippets in grouped.items() %}
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="heading{{ loop.index }}">
+                        <button class="accordion-button collapsed" type="button" 
+                                data-bs-toggle="collapse" 
+                                data-bs-target="#collapse{{ loop.index }}">
+                            {{ filename }}
+                        </button>
+                    </h2>
+                    <div id="collapse{{ loop.index }}" class="accordion-collapse collapse" 
+                         data-bs-parent="#contextAccordion">
+                        <div class="accordion-body">
+                            {% for snippet in snippets %}
+                                <p>{{ snippet|safe }}</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
