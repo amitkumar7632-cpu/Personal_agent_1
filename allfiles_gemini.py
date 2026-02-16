@@ -22,7 +22,7 @@ def home():
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 10000))  # Render provides PORT automatically
     app.run(host="0.0.0.0", port=port)
-    
+
 # --- Extract text from PPT slides (shapes + images with OCR) ---
 def extract_text_from_ppt(filepath):
     texts = []
@@ -100,7 +100,7 @@ def ingest_folder(folder_path):
     return texts
 
 # --- Load all documents from your folder ---
-folder_path = r"C:\Users\AMIT K\OneDrive\ALL_Docs"
+folder_path = r"C:\Users\AMIT K\OneDrive\Desktop\PYTHON\LEARNING\Personal agent\ALL_Docs"
 all_texts = ingest_folder(folder_path)
 
 # --- Embeddings + FAISS index ---
