@@ -7,53 +7,30 @@ from pptx import Presentation
 from docx import Document
 import pdfplumber
 from PIL import Image
-import pytesseract
 from google import genai
 
-# --- Explicitly set Tesseract path ---
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-
+# -----------------------------
+# Flask App
+# -----------------------------
 app = Flask(__name__)
 
-@app.route("/")
-def home():
-    return "Hello, Render!"
-
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", 10000))  # Render provides PORT automatically
-    app.run(host="0.0.0.0", port=port)
-
-# --- Extract text from PPT slides (shapes + images with OCR) ---
+# -----------------------------
+# Extract text from PPT (no OCR)
+# -----------------------------
 def extract_text_from_ppt(filepath):
     texts = []
     prs = Presentation(filepath)
     for i, slide in enumerate(prs.slides, start=1):
         for shape in slide.shapes:
-            # Text frames
             if shape.has_text_frame:
                 for para in shape.text_frame.paragraphs:
                     if para.text.strip():
                         texts.append(f"{os.path.basename(filepath)} - Slide {i}: {para.text.strip()}")
-
-            # Images (pictures)
-            if shape.shape_type == 13:  # 13 = Picture
-                image = shape.image
-                image_bytes = image.blob
-                temp_path = f"temp_slide_{i}.png"
-                with open(temp_path, "wb") as f:
-                    f.write(image_bytes)
-                try:
-                    img = Image.open(temp_path)
-                    ocr_text = pytesseract.image_to_string(img)
-                    if ocr_text.strip():
-                        texts.append(f"{os.path.basename(filepath)} - Slide {i} (OCR): {ocr_text.strip()}")
-                except Exception as e:
-                    print("OCR error:", e)
-                finally:
-                    os.remove(temp_path)
     return texts
 
-# --- Extract text from PDF (text + OCR fallback) ---
+# -----------------------------
+# Extract text from PDF (no OCR)
+# -----------------------------
 def extract_text_from_pdf(filepath):
     texts = []
     with pdfplumber.open(filepath) as pdf:
@@ -61,19 +38,17 @@ def extract_text_from_pdf(filepath):
             text = page.extract_text()
             if text and text.strip():
                 texts.append(f"{os.path.basename(filepath)} - Page {i}: {text.strip()}")
-            else:
-                # Fallback: OCR on scanned pages
-                img = page.to_image(resolution=300).original
-                ocr_text = pytesseract.image_to_string(img)
-                if ocr_text.strip():
-                    texts.append(f"{os.path.basename(filepath)} - Page {i} (OCR): {ocr_text.strip()}")
     return texts
 
-# --- Ingest all supported files from a folder ---
+# -----------------------------
+# Ingest all supported files
+# -----------------------------
 def ingest_folder(folder_path):
     texts = []
+    if not os.path.exists(folder_path):
+        return texts
+
     for filename in os.listdir(folder_path):
-        # Skip hidden/lock files created by Office
         if filename.startswith("~$"):
             continue
 
@@ -99,43 +74,56 @@ def ingest_folder(folder_path):
 
     return texts
 
-# --- Load all documents from your folder ---
-folder_path = r"C:\Users\AMIT K\OneDrive\Desktop\PYTHON\LEARNING\Personal agent\ALL_Docs"
+# -----------------------------
+# Load documents (Render-safe)
+# -----------------------------
+folder_path = "C:\Users\AMIT K\OneDrive\Desktop\PYTHON\LEARNING\Personal agent\ALL_Docs"
 all_texts = ingest_folder(folder_path)
 
-# --- Embeddings + FAISS index ---
-model = SentenceTransformer("all-MiniLM-L6-v2")
-embeddings = model.encode(all_texts)
-dimension = embeddings.shape[1]
-index = faiss.IndexFlatL2(dimension)
-index.add(np.array(embeddings))
+# -----------------------------
+# Embeddings + FAISS
+# -----------------------------
+if all_texts:
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+    embeddings = model.encode(all_texts)
+    dimension = embeddings.shape[1]
+    index = faiss.IndexFlatL2(dimension)
+    index.add(np.array(embeddings))
+else:
+    model = None
+    index = None
 
-# --- Gemini client (direct API key) ---
-client = genai.Client(api_key="AIzaSyAqXiJcrigh5bxeiWPnspnLcOWyCRcGqVE")
+# -----------------------------
+# Gemini Client (Render-safe)
+# -----------------------------
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-# --- Flask app ---
-app = Flask(__name__)
-
-# --- Helper function for highlighting query terms ---
+# -----------------------------
+# Highlight helper
+# -----------------------------
 def highlight_terms(text, query):
-    # Case-insensitive highlighting
     for term in query.split():
-        # Replace lowercase and capitalized versions
         text = text.replace(term, f"<mark>{term}</mark>")
         text = text.replace(term.capitalize(), f"<mark>{term.capitalize()}</mark>")
     return text
 
-
+# -----------------------------
+# Routes
+# -----------------------------
 @app.route("/", methods=["GET", "POST"])
 def home():
     answer = ""
     context = ""
+
     if request.method == "POST":
         query = request.form["query"]
+
+        if not all_texts:
+            return "No documents found in ALL_Docs folder."
+
         query_embedding = model.encode([query])
         D, I = index.search(np.array(query_embedding), k=5)
 
-        # Highlight query terms in retrieved context
         context = "\n".join([highlight_terms(all_texts[idx], query) for idx in I[0]])
 
         response = client.models.generate_content(
@@ -151,5 +139,9 @@ def home():
 
     return render_template("download_index.html", answer=answer, context=context)
 
+# -----------------------------
+# Run locally
+# -----------------------------
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.getenv("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
