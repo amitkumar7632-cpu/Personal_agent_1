@@ -1,1 +1,0 @@
-web: python allfiles_gemini.py
