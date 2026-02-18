@@ -6,5 +6,5 @@ pdfplumber
 python-docx
 python-pptx
 Pillow
-google-generativeai
+google-genai
 numpy
