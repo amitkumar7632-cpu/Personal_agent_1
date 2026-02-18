@@ -6,16 +6,21 @@ from sentence_transformers import SentenceTransformer
 from pptx import Presentation
 from docx import Document
 import pdfplumber
-from PIL import Image
 from google import genai
 
-# -----------------------------
-# Flask App
-# -----------------------------
 app = Flask(__name__)
 
 # -----------------------------
-# Extract text from PPT (no OCR)
+# Lazy Globals (loaded on demand)
+# -----------------------------
+model = None
+index = None
+all_texts = None
+client = None
+
+
+# -----------------------------
+# Extract text from PPT
 # -----------------------------
 def extract_text_from_ppt(filepath):
     texts = []
@@ -28,8 +33,9 @@ def extract_text_from_ppt(filepath):
                         texts.append(f"{os.path.basename(filepath)} - Slide {i}: {para.text.strip()}")
     return texts
 
+
 # -----------------------------
-# Extract text from PDF (no OCR)
+# Extract text from PDF
 # -----------------------------
 def extract_text_from_pdf(filepath):
     texts = []
@@ -40,8 +46,9 @@ def extract_text_from_pdf(filepath):
                 texts.append(f"{os.path.basename(filepath)} - Page {i}: {text.strip()}")
     return texts
 
+
 # -----------------------------
-# Ingest all supported files
+# Ingest folder (lazy)
 # -----------------------------
 def ingest_folder(folder_path):
     texts = []
@@ -74,29 +81,6 @@ def ingest_folder(folder_path):
 
     return texts
 
-# -----------------------------
-# Load documents (Render-safe)
-# -----------------------------
-folder_path = "ALL_Docs"
-all_texts = ingest_folder(folder_path)
-
-# -----------------------------
-# Embeddings + FAISS
-# -----------------------------
-if all_texts:
-    model = SentenceTransformer("all-MiniLM-L6-v2")
-    embeddings = model.encode(all_texts)
-    dimension = embeddings.shape[1]
-    index = faiss.IndexFlatL2(dimension)
-    index.add(np.array(embeddings))
-else:
-    model = None
-    index = None
-
-# -----------------------------
-# Gemini Client (Render-safe)
-# -----------------------------
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 # -----------------------------
 # Highlight helper
@@ -107,25 +91,50 @@ def highlight_terms(text, query):
         text = text.replace(term.capitalize(), f"<mark>{term.capitalize()}</mark>")
     return text
 
+
 # -----------------------------
-# Routes
+# Home Route
 # -----------------------------
 @app.route("/", methods=["GET", "POST"])
 def home():
+    global model, index, all_texts, client
+
     answer = ""
     context = ""
 
+    # Lazy load everything only when needed
     if request.method == "POST":
         query = request.form["query"]
+
+        # Load documents
+        if all_texts is None:
+            all_texts = ingest_folder("ALL_Docs")
 
         if not all_texts:
             return "No documents found in ALL_Docs folder."
 
+        # Load embedding model
+        if model is None:
+            model = SentenceTransformer("all-MiniLM-L6-v2")
+
+        # Build FAISS index
+        if index is None:
+            embeddings = model.encode(all_texts)
+            dimension = embeddings.shape[1]
+            index = faiss.IndexFlatL2(dimension)
+            index.add(np.array(embeddings))
+
+        # Load Gemini client
+        if client is None:
+            client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+        # Search
         query_embedding = model.encode([query])
         D, I = index.search(np.array(query_embedding), k=5)
 
         context = "\n".join([highlight_terms(all_texts[idx], query) for idx in I[0]])
 
+        # Gemini response
         response = client.models.generate_content(
             model="models/gemini-2.5-flash",
             contents=(
@@ -138,6 +147,7 @@ def home():
         answer = response.text
 
     return render_template("download_index.html", answer=answer, context=context)
+
 
 # -----------------------------
 # Run locally
