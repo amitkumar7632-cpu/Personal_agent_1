@@ -146,7 +146,7 @@ def home():
         )
         answer = response.text
 
-    return render_template("download_index.html", answer=answer, context=context)
+    return render_template("index.html", answer=answer, context=context)
 
 
 # -----------------------------
