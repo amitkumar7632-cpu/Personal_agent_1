@@ -1,6 +1,5 @@
 import os
 import numpy as np
-import faiss
 from flask import Flask, request, render_template
 from sentence_transformers import SentenceTransformer
 from pptx import Presentation
@@ -11,12 +10,13 @@ from google import genai
 app = Flask(__name__)
 
 # -----------------------------
-# Lazy Globals (loaded on demand)
+# Lazy Globals
 # -----------------------------
 model = None
 index = None
 all_texts = None
 client = None
+faiss = None   # FAISS lazy import
 
 
 # -----------------------------
@@ -97,12 +97,11 @@ def highlight_terms(text, query):
 # -----------------------------
 @app.route("/", methods=["GET", "POST"])
 def home():
-    global model, index, all_texts, client
+    global model, index, all_texts, client, faiss
 
     answer = ""
     context = ""
 
-    # Lazy load everything only when needed
     if request.method == "POST":
         query = request.form["query"]
 
@@ -112,6 +111,11 @@ def home():
 
         if not all_texts:
             return "No documents found in ALL_Docs folder."
+
+        # Lazy import FAISS
+        if faiss is None:
+            import faiss as faiss_module
+            faiss = faiss_module
 
         # Load embedding model
         if model is None:
