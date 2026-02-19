@@ -4,19 +4,20 @@
     <title>Personal Agent</title>
 </head>
 <body>
-    <h1>Your Agent is Live</h1>
+    <h1>Ask your documents</h1>
+
     <form method="POST">
-        <input type="text" name="query" placeholder="Ask something..." />
+        <input type="text" name="query" placeholder="Ask something..." required>
         <button type="submit">Ask</button>
     </form>
 
     {% if answer %}
-        <h2>Answer:</h2>
+        <h2>Answer</h2>
         <p>{{ answer|safe }}</p>
     {% endif %}
 
     {% if context %}
-        <h2>Context:</h2>
+        <h2>Context</h2>
         <pre>{{ context|safe }}</pre>
     {% endif %}
 </body>
