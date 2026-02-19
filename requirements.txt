@@ -1,12 +1,2 @@
 flask
 gunicorn
-faiss-cpu
-sentence-transformers
-pdfplumber
-python-docx
-python-pptx
-Pillow
-google-genai
-numpy
-requests
-
