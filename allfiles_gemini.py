@@ -1,10 +1,17 @@
-from flask import Flask
+from flask import Flask, request, render_template
 
 app = Flask(__name__)
 
-@app.route("/")
+@app.route("/", methods=["GET", "POST"])
 def home():
-    return "Render is working! Flask is running successfully."
+    answer = ""
+    context = ""
+
+    if request.method == "POST":
+        query = request.form["query"]
+        answer = f"You asked: {query}"
+
+    return render_template("index.html", answer=answer, context=context)
 
 if __name__ == "__main__":
     import os
