@@ -5,7 +5,7 @@ from sentence_transformers import SentenceTransformer
 from pptx import Presentation
 from docx import Document
 import pdfplumber
-from google import genai
+import google.generativeai as genai   # ✅ Correct Gemini import
 
 app = Flask(__name__)
 
@@ -15,8 +15,8 @@ app = Flask(__name__)
 model = None
 index = None
 all_texts = None
-client = None
-faiss = None   # FAISS lazy import
+faiss = None
+genai_configured = False
 
 
 # -----------------------------
@@ -97,7 +97,7 @@ def highlight_terms(text, query):
 # -----------------------------
 @app.route("/", methods=["GET", "POST"])
 def home():
-    global model, index, all_texts, client, faiss
+    global model, index, all_texts, faiss, genai_configured
 
     answer = ""
     context = ""
@@ -128,9 +128,10 @@ def home():
             index = faiss.IndexFlatL2(dimension)
             index.add(np.array(embeddings))
 
-        # Load Gemini client
-        if client is None:
-            client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+        # Configure Gemini once
+        if not genai_configured:
+            genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+            genai_configured = True
 
         # Search
         query_embedding = model.encode([query])
@@ -139,16 +140,17 @@ def home():
         context = "\n".join([highlight_terms(all_texts[idx], query) for idx in I[0]])
 
         # Gemini response
-        response = client.models.generate_content(
+        response = genai.generate_text(
             model="models/gemini-2.5-flash",
-            contents=(
+            prompt=(
                 f"Answer the question strictly using the context below.\n\n"
                 f"Context:\n{context}\n\n"
                 f"Question: {query}\n\n"
                 f"Give a direct answer based only on the context."
             )
         )
-        answer = response.text
+
+        answer = response.result
 
     return render_template("index.html", answer=answer, context=context)
 
