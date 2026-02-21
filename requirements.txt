@@ -6,6 +6,6 @@ pdfplumber
 python-docx
 python-pptx
 Pillow
-google-genai
+google-generativeai
 numpy
 requests
