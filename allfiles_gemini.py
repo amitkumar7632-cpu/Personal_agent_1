@@ -5,7 +5,8 @@ from sentence_transformers import SentenceTransformer
 from pptx import Presentation
 from docx import Document
 import pdfplumber
-import google.generativeai as genai   # ✅ Correct Gemini import
+import google.generativeai as genai
+from sklearn.neighbors import NearestNeighbors   # ⭐ FAISS-free retrieval
 
 app = Flask(__name__)
 
@@ -13,9 +14,9 @@ app = Flask(__name__)
 # Lazy Globals
 # -----------------------------
 model = None
-index = None
+nn_model = None
 all_texts = None
-faiss = None
+embeddings = None
 genai_configured = False
 
 
@@ -97,7 +98,7 @@ def highlight_terms(text, query):
 # -----------------------------
 @app.route("/", methods=["GET", "POST"])
 def home():
-    global model, index, all_texts, faiss, genai_configured
+    global model, nn_model, all_texts, embeddings, genai_configured
 
     answer = ""
     context = ""
@@ -112,21 +113,15 @@ def home():
         if not all_texts:
             return "No documents found in ALL_Docs folder."
 
-        # Lazy import FAISS
-        if faiss is None:
-            import faiss as faiss_module
-            faiss = faiss_module
-
         # Load embedding model
         if model is None:
             model = SentenceTransformer("all-MiniLM-L6-v2")
 
-        # Build FAISS index
-        if index is None:
+        # Build embeddings + NearestNeighbors
+        if embeddings is None:
             embeddings = model.encode(all_texts)
-            dimension = embeddings.shape[1]
-            index = faiss.IndexFlatL2(dimension)
-            index.add(np.array(embeddings))
+            nn_model = NearestNeighbors(n_neighbors=5, metric="cosine")
+            nn_model.fit(embeddings)
 
         # Configure Gemini once
         if not genai_configured:
@@ -135,9 +130,9 @@ def home():
 
         # Search
         query_embedding = model.encode([query])
-        D, I = index.search(np.array(query_embedding), k=5)
+        distances, indices = nn_model.kneighbors(query_embedding)
 
-        context = "\n".join([highlight_terms(all_texts[idx], query) for idx in I[0]])
+        context = "\n".join([highlight_terms(all_texts[idx], query) for idx in indices[0]])
 
         # Gemini response
         response = genai.generate_text(
